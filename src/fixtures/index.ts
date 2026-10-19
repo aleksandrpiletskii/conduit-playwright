@@ -68,7 +68,9 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
   },
 
   userApi: async ({ api, workerUser }, use) => {
-    await use(api.as(workerUser.token));
+    // workerUser doubles as the shared session: if the client signs in
+    // again, workerUser.token is updated for every later test in the worker.
+    await use(api.asAccount(workerUser));
   },
 
   article: async ({ userApi }, use) => {
