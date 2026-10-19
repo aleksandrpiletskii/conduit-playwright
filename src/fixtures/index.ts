@@ -2,7 +2,7 @@ import { test as base, expect } from '@playwright/test';
 import { AccountUser, createVerifiedAccount } from '../api/accounts';
 import { ConduitApi } from '../api/ConduitApi';
 import type { Article } from '../api/types';
-import { buildArticle } from '../data/factories';
+import { buildArticle, buildUser } from '../data/factories';
 import { ArticlePage } from '../pages/ArticlePage';
 import { EditorPage } from '../pages/EditorPage';
 import { HomePage } from '../pages/HomePage';
@@ -26,6 +26,12 @@ type TestFixtures = {
    * touch the account API.
    */
   signedIn: AccountUser;
+  /**
+   * Throwaway account for tests that sign in with a password. Signing in
+   * rotates the token on this backend, so such tests must never use the
+   * shared worker account.
+   */
+  newAccount: AccountUser;
   /** Anonymous API client. */
   api: ConduitApi;
   /** API client authenticated as the worker's user. */
@@ -53,6 +59,12 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
   // ---- layer 2: API clients and seeded data --------------------------------
   api: async ({ request }, use) => {
     await use(new ConduitApi(request));
+  },
+
+  newAccount: async ({ api }, use) => {
+    const credentials = buildUser();
+    const user = await api.register(credentials);
+    await use({ ...user, password: credentials.password });
   },
 
   userApi: async ({ api, workerUser }, use) => {
