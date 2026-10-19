@@ -1,16 +1,14 @@
 import { test as base, expect } from '@playwright/test';
+import { AccountUser, createVerifiedAccount } from '../api/accounts';
 import { ConduitApi } from '../api/ConduitApi';
-import type { Article, User } from '../api/types';
-import { buildArticle, buildUser } from '../data/factories';
+import type { Article } from '../api/types';
+import { buildArticle } from '../data/factories';
 import { ArticlePage } from '../pages/ArticlePage';
 import { EditorPage } from '../pages/EditorPage';
 import { HomePage } from '../pages/HomePage';
 import { LoginPage } from '../pages/LoginPage';
 
-/** A registered account plus the password, so UI tests can sign in with it. */
-export interface AccountUser extends User {
-  password: string;
-}
+export type { AccountUser };
 
 type WorkerFixtures = {
   /**
@@ -45,12 +43,11 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
   workerUser: [
     async ({ playwright }, use) => {
       const request = await playwright.request.newContext();
-      const credentials = buildUser();
-      const user = await new ConduitApi(request).register(credentials);
-      await use({ ...user, password: credentials.password });
+      const user = await createVerifiedAccount(new ConduitApi(request));
+      await use(user);
       await request.dispose();
     },
-    { scope: 'worker' },
+    { scope: 'worker', timeout: 60_000 },
   ],
 
   // ---- layer 2: API clients and seeded data --------------------------------
