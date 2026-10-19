@@ -12,18 +12,18 @@ test.describe('Users API', () => {
     expect(user.token.length).toBeGreaterThan(10);
   });
 
-  test('signs in with valid credentials', async ({ api, workerUser }) => {
-    const user = await api.login(workerUser.email, workerUser.password);
+  test('signs in with valid credentials', async ({ api, newAccount }) => {
+    const user = await api.login(newAccount.email, newAccount.password);
 
-    expect(user).toMatchObject({ username: workerUser.username, email: workerUser.email });
+    expect(user).toMatchObject({ username: newAccount.username, email: newAccount.email });
   });
 
   test('the token identifies its owner', async ({ userApi, workerUser }) => {
     expect(await userApi.currentUser()).toMatchObject({ username: workerUser.username });
   });
 
-  test('rejects a wrong password', async ({ api, workerUser }) => {
-    const res = await api.rawLogin(workerUser.email, `${workerUser.password}-wrong`);
+  test('rejects a wrong password', async ({ api, newAccount }) => {
+    const res = await api.rawLogin(newAccount.email, `${newAccount.password}-wrong`);
 
     expect(res.status()).toBe(401);
     expect((await res.json()).errors).toBeDefined();
