@@ -22,7 +22,9 @@ test.describe('Articles', () => {
     }
   });
 
-  test('renders an article seeded through the API', async ({ article, articlePage }) => {
+  // The demo backend sandboxes accounts: an article is visible only to its
+  // author, so the page is opened in the author's session.
+  test('renders an article seeded through the API', async ({ signedIn: _session, article, articlePage }) => {
     await articlePage.goto(article.slug);
 
     await expect(articlePage.title).toHaveText(article.title);
