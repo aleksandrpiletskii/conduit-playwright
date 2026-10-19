@@ -27,7 +27,7 @@ tests/
 
 | Layer | Fixture | Scope | What it does |
 |---|---|---|---|
-| Accounts | `workerUser` | worker | One account per worker, registered via API. Parallel workers never share data |
+| Accounts | `workerUser` | worker | One account per worker, registered via API and verified (see below). Parallel workers never share data |
 | API | `api`, `userApi` | test | Anonymous and authenticated API clients |
 | Data | `article` | test | Creates an article via API before the test and deletes it after |
 | Session | `signedIn` | test | Puts the API token into `localStorage` before page load, so UI tests skip the login form |
@@ -40,6 +40,14 @@ tests/
 - **API ↔ UI consistency.** The feed must show exactly what the API returns (`tests/ui/feed-consistency.spec.ts`).
 - **Mutation check.** The same consistency check runs against a tampered response and is expected to fail. If it ever passes, the assertion has stopped catching real defects.
 - **Cleanup that survives failures.** Seeded data is removed in fixture teardown or `finally` blocks, and cleanup tolerates already-deleted entities.
+
+## Notes on the demo backend
+
+Findings from the first CI runs against the public API, and how the framework handles them:
+
+- **Accounts are sandboxed.** An article is visible only to its author, so tests open seeded articles in the author's session instead of anonymously.
+- **Email uniqueness isn't enforced across accounts.** A duplicate sign-up succeeds, so there is no duplicate-email test.
+- **Identity collisions under parallel sign-ups.** A freshly issued token was occasionally resolved to another account: articles came back authored by someone else and deletes were refused. `createVerifiedAccount` waits a moment, takes a new token and checks that it resolves to the same username, re-creating the account if not.
 
 ## Run locally
 
