@@ -12,28 +12,26 @@ test.describe('Users API', () => {
     expect(user.token.length).toBeGreaterThan(10);
   });
 
-  test('signs in with the registered credentials', async ({ api }) => {
-    const credentials = buildUser();
-    await api.register(credentials);
+  test('signs in with valid credentials', async ({ api, workerUser }) => {
+    const user = await api.login(workerUser.email, workerUser.password);
 
-    const user = await api.login(credentials.email, credentials.password);
+    expect(user).toMatchObject({ username: workerUser.username, email: workerUser.email });
+  });
 
-    expect(user.username).toBe(credentials.username);
-    expect(await api.as(user.token).currentUser()).toMatchObject({ username: credentials.username });
+  test('the token identifies its owner', async ({ userApi, workerUser }) => {
+    expect(await userApi.currentUser()).toMatchObject({ username: workerUser.username });
   });
 
   test('rejects a wrong password', async ({ api, workerUser }) => {
     const res = await api.rawLogin(workerUser.email, `${workerUser.password}-wrong`);
 
-    expect(res.ok()).toBe(false);
-    expect([401, 403, 422]).toContain(res.status());
+    expect(res.status()).toBe(401);
+    expect((await res.json()).errors).toBeDefined();
   });
 
-  test('rejects a duplicate email with a validation error', async ({ api, workerUser }) => {
-    const res = await api.rawRegister(buildUser({ email: workerUser.email }));
+  test('rejects an unknown email', async ({ api }) => {
+    const res = await api.rawLogin(buildUser().email, 'whatever');
 
-    // The RealWorld spec prescribes 422; some backends answer 409 Conflict.
-    expect([409, 422]).toContain(res.status());
-    expect((await res.json()).errors).toBeDefined();
+    expect(res.status()).toBe(401);
   });
 });
