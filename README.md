@@ -48,6 +48,7 @@ Findings from the first CI runs against the public API, and how the framework ha
 - **Accounts are sandboxed.** An article is visible only to its author, so tests open seeded articles in the author's session instead of anonymously.
 - **Email uniqueness isn't enforced across accounts.** A duplicate sign-up succeeds, so there is no duplicate-email test.
 - **Identity collisions under parallel sign-ups.** A freshly issued token was occasionally resolved to another account: articles came back authored by someone else and deletes were refused. `createVerifiedAccount` waits a moment, takes a new token and checks that it resolves to the same username, re-creating the account if not.
+- **Signing in rotates the token.** After an account signs in again, its earlier token stops working. Tests that sign in with a password use a throwaway `newAccount`, so the shared worker account keeps a valid token.
 
 ## Run locally
 
