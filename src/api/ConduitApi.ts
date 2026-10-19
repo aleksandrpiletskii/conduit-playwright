@@ -3,29 +3,62 @@ import { env } from '../config/env';
 import type { Article, ArticlesResponse, NewArticle, NewUser, User } from './types';
 
 /**
+ * Auth state shared by every client made for the same account. It is
+ * mutable on purpose: when the client signs in again, the new token is
+ * visible to everyone holding the session.
+ */
+export interface Session {
+  token: string;
+  email?: string;
+  password?: string;
+}
+
+/**
  * Thin typed client over the RealWorld REST API.
  *
  * `raw*` methods return the APIResponse so negative tests can assert on
  * status codes and error bodies; the plain methods assert success and
  * return parsed data, which keeps setup code in fixtures short.
+ *
+ * Authenticated calls recover from a dropped session: on 401 the client
+ * signs in again with the stored credentials and repeats the request once.
+ * The public demo backend invalidates tokens unpredictably, and without
+ * this the failures land in setup and teardown rather than in what a test
+ * actually checks.
  */
 export class ConduitApi {
   constructor(
     private readonly request: APIRequestContext,
-    private readonly token?: string,
+    private readonly session?: Session,
   ) {}
 
-  /** Returns a client that sends `Authorization: Token <token>`. */
+  /** Client that sends `Authorization: Token <token>`, without recovery. */
   as(token: string): ConduitApi {
-    return new ConduitApi(this.request, token);
+    return new ConduitApi(this.request, { token });
+  }
+
+  /** Client for an account whose credentials are known, with recovery. */
+  asAccount(session: Session): ConduitApi {
+    return new ConduitApi(this.request, session);
   }
 
   private headers(): Record<string, string> {
-    return this.token ? { Authorization: `Token ${this.token}` } : {};
+    return this.session ? { Authorization: `Token ${this.session.token}` } : {};
   }
 
   private url(path: string): string {
     return `${env.apiUrl}${path}`;
+  }
+
+  private async authed(send: (headers: Record<string, string>) => Promise<APIResponse>): Promise<APIResponse> {
+    const res = await send(this.headers());
+    const { session } = this;
+    if (res.status() !== 401 || !session?.email || !session.password) return res;
+
+    const login = await this.rawLogin(session.email, session.password);
+    if (!login.ok()) return res;
+    session.token = (await login.json()).user.token;
+    return send(this.headers());
   }
 
   // ---- users ---------------------------------------------------------------
@@ -51,7 +84,7 @@ export class ConduitApi {
   }
 
   async currentUser(): Promise<User> {
-    const res = await this.request.get(this.url('/user'), { headers: this.headers() });
+    const res = await this.authed((headers) => this.request.get(this.url('/user'), { headers }));
     await expectOk(res, 'get current user');
     return (await res.json()).user;
   }
@@ -59,10 +92,7 @@ export class ConduitApi {
   // ---- articles ------------------------------------------------------------
 
   rawCreateArticle(article: Partial<NewArticle>): Promise<APIResponse> {
-    return this.request.post(this.url('/articles'), {
-      data: { article },
-      headers: this.headers(),
-    });
+    return this.authed((headers) => this.request.post(this.url('/articles'), { data: { article }, headers }));
   }
 
   async createArticle(article: NewArticle): Promise<Article> {
@@ -72,7 +102,7 @@ export class ConduitApi {
   }
 
   rawGetArticle(slug: string): Promise<APIResponse> {
-    return this.request.get(this.url(`/articles/${slug}`), { headers: this.headers() });
+    return this.authed((headers) => this.request.get(this.url(`/articles/${slug}`), { headers }));
   }
 
   async getArticle(slug: string): Promise<Article> {
@@ -82,22 +112,21 @@ export class ConduitApi {
   }
 
   async listArticles(params: { author?: string; tag?: string; limit?: number } = {}): Promise<ArticlesResponse> {
-    const res = await this.request.get(this.url('/articles'), {
-      params: params as Record<string, string | number>,
-      headers: this.headers(),
-    });
+    const res = await this.authed((headers) =>
+      this.request.get(this.url('/articles'), { params: params as Record<string, string | number>, headers }),
+    );
     await expectOk(res, 'list articles');
     return res.json();
   }
 
   async favorite(slug: string): Promise<Article> {
-    const res = await this.request.post(this.url(`/articles/${slug}/favorite`), { headers: this.headers() });
+    const res = await this.authed((headers) => this.request.post(this.url(`/articles/${slug}/favorite`), { headers }));
     await expectOk(res, `favorite ${slug}`);
     return (await res.json()).article;
   }
 
   rawDeleteArticle(slug: string): Promise<APIResponse> {
-    return this.request.delete(this.url(`/articles/${slug}`), { headers: this.headers() });
+    return this.authed((headers) => this.request.delete(this.url(`/articles/${slug}`), { headers }));
   }
 
   /** Cleanup helper: tolerates an article that a test already deleted. */
